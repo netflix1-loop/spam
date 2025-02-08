@@ -25,6 +25,7 @@ let groups = [];
 let failedGroups = [];
 let forwardedCount = 0;
 let totalGroups = 0;
+let processedGroups = 0; // New counter for total groups processed
 let isLoopRunning = false;
 let accountName = "";
 
@@ -54,6 +55,7 @@ async function forwardMessages() {
   isLoopRunning = true;
   forwardedCount = 0;
   failedGroups = [];
+  processedGroups = 0;
 
   const lastMessage = await getLastSavedMessage();
   if (!lastMessage) {
@@ -64,10 +66,8 @@ async function forwardMessages() {
   console.log(`🚀 Started Forwarding Messages as: ${accountName}`);
   await bot.sendMessage(ownerChatId, `🚀 **Started Forwarding Messages as:** ${accountName}`);
 
-  let processedCount = 0;
-
   for (const group of groups) {
-    processedCount++;
+    processedGroups++; // Count every attempt (success or failure)
     try {
       await client.invoke(
         new Api.messages.ForwardMessages({
@@ -79,14 +79,14 @@ async function forwardMessages() {
       );
 
       forwardedCount++;
-      console.log(`✅ Forwarded to ${group.title} {${processedCount}/${totalGroups}}`);
+      console.log(`✅ Forwarded to ${group.title} (${processedGroups}/${totalGroups})`);
 
       // Wait between 270 - 360 seconds
       const waitTime = Math.floor(Math.random() * (360 - 270 + 1)) + 270;
       console.log(`⏳ Waiting for ${waitTime} seconds before next...`);
       await delay(waitTime * 1000);
     } catch (error) {
-      console.error(`❌ Failed to forward to ${group.title} {${processedCount}/${totalGroups}}`);
+      console.error(`❌ Failed to forward to ${group.title} (${processedGroups}/${totalGroups})`);
       failedGroups.push(group);
       await bot.sendMessage(ownerChatId, `❌ Failed to forward to: \`${group.title}\``, { parse_mode: "Markdown" });
       continue;
@@ -118,14 +118,16 @@ bot.onText(/\/logout/, async (msg) => {
 
   await bot.sendMessage(ownerChatId, "🔴 Logging out...");
   try {
+    // Logout using Telegram API
     await client.invoke(new Api.auth.LogOut());
 
+    // Remove session file to ensure the account is completely logged out
     if (fs.existsSync(SESSION_FILE)) {
       fs.unlinkSync(SESSION_FILE);
     }
 
     await bot.sendMessage(ownerChatId, "✅ Successfully logged out! Session expired.");
-    process.exit();
+    process.exit(); // Exit the script
   } catch (error) {
     await bot.sendMessage(ownerChatId, `❌ Logout failed: ${error.message}`);
   }
@@ -137,6 +139,7 @@ bot.on("callback_query", async (query) => {
     await bot.sendMessage(ownerChatId, "⏳ Fetching groups again...");
     await fetchGroups();
 
+    // Wait 270 - 360 seconds before restarting
     const waitTime = Math.floor(Math.random() * (360 - 270 + 1)) + 270;
     console.log(`🕒 Waiting for ${waitTime} seconds before restarting next loop...`);
     await bot.sendMessage(ownerChatId, `🕒 Waiting for ${waitTime} seconds before restarting...`);
