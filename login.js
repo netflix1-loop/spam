@@ -24,8 +24,9 @@ const bot = new TelegramBot(botToken, { polling: true });
 let groups = [];
 let failedGroups = [];
 let forwardedCount = 0;
+let failedCount = 0;
 let totalGroups = 0;
-let processedGroups = 0; // New counter for total groups processed
+let processedGroups = 0;
 let isLoopRunning = false;
 let accountName = "";
 
@@ -54,7 +55,7 @@ async function getLastSavedMessage() {
 async function forwardMessages() {
   isLoopRunning = true;
   forwardedCount = 0;
-  failedGroups = [];
+  failedCount = 0;
   processedGroups = 0;
 
   const lastMessage = await getLastSavedMessage();
@@ -86,6 +87,7 @@ async function forwardMessages() {
       console.log(`⏳ Waiting for ${waitTime} seconds before next...`);
       await delay(waitTime * 1000);
     } catch (error) {
+      failedCount++;
       console.error(`❌ Failed to forward to ${group.title} (${processedGroups}/${totalGroups})`);
       failedGroups.push(group);
       await bot.sendMessage(ownerChatId, `❌ Failed to forward to: \`${group.title}\``, { parse_mode: "Markdown" });
@@ -109,7 +111,12 @@ async function forwardMessages() {
 // Monitor Telegram bot commands
 bot.onText(/\/q/, async (msg) => {
   if (msg.chat.id.toString() !== ownerChatId) return;
-  await bot.sendMessage(ownerChatId, `📊 **Progress:** ${forwardedCount}/${totalGroups} (including failed)`);
+  await bot.sendMessage(ownerChatId, 
+    `📊 **Forwarding Progress:**\n` +
+    `✅ Success: ${forwardedCount}\n` +
+    `❌ Failed: ${failedCount}\n` +
+    `🔢 Total: ${processedGroups}/${totalGroups}`
+  );
 });
 
 // Secure Logout
