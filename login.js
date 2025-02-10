@@ -112,7 +112,7 @@ async function forwardMessages() {
 bot.onText(/\/q/, async (msg) => {
   if (msg.chat.id.toString() !== ownerChatId) return;
   await bot.sendMessage(ownerChatId, 
-    `📊 **Forwarding Progress:**\n` +
+    `📊 Forwarding Progress:\n` +
     `✅ Success: ${forwardedCount}\n` +
     `❌ Failed: ${failedCount}\n` +
     `🔢 Total: ${processedGroups}/${totalGroups}`
@@ -180,7 +180,7 @@ async function start() {
     accountName = `${me.firstName} ${me.lastName || ""}`.trim();
     console.log(`✅ Logged in as: ${accountName}`);
 
-    await bot.sendMessage(ownerChatId, `✅ **Script Started!**\n👤 Account: ${accountName}`);
+    await bot.sendMessage(ownerChatId, `✅ Script Started!\n👤 Account: ${accountName}`);
 
     await fetchGroups();
     await forwardMessages();
