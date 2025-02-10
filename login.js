@@ -43,6 +43,9 @@ async function fetchGroups() {
   }
   totalGroups = groups.length;
   console.log(`✅ Total Groups: ${totalGroups}`);
+
+  // Notify the user via bot
+  await bot.sendMessage(ownerChatId, `📌 Groups fetched successfully! **${totalGroups} groups found.**`);
 }
 
 // Function to get last saved message
@@ -97,13 +100,20 @@ async function forwardMessages() {
 
   console.log("\n✅ Loop Completed! Waiting for user confirmation to start next loop...");
   
-  // Notify loop completion & wait for user input
-  await bot.sendMessage(ownerChatId, `✅ **Loop Completed!**`, {
-    parse_mode: "Markdown",
-    reply_markup: {
-      inline_keyboard: [[{ text: "🔄 Start Next Loop", callback_data: "start_next_loop" }]],
-    },
-  });
+  // Notify user via bot
+  await bot.sendMessage(
+    ownerChatId,
+    `✅ **Loop Completed!**\n\n` +
+    `❌ Failed: ${failedCount}\n` +
+    `✅ Successful: ${forwardedCount}\n` +
+    `🔢 Total: ${processedGroups}/${totalGroups}`,
+    {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [[{ text: "🔄 Start Next Loop", callback_data: "start_next_loop" }]],
+      },
+    }
+  );
 
   isLoopRunning = false;
 }
@@ -111,8 +121,9 @@ async function forwardMessages() {
 // Monitor Telegram bot commands
 bot.onText(/\/q/, async (msg) => {
   if (msg.chat.id.toString() !== ownerChatId) return;
-  await bot.sendMessage(ownerChatId, 
-    `📊 Forwarding Progress:\n` +
+  await bot.sendMessage(
+    ownerChatId, 
+    `📊 **Forwarding Progress:**\n` +
     `✅ Success: ${forwardedCount}\n` +
     `❌ Failed: ${failedCount}\n` +
     `🔢 Total: ${processedGroups}/${totalGroups}`
@@ -125,16 +136,13 @@ bot.onText(/\/logout/, async (msg) => {
 
   await bot.sendMessage(ownerChatId, "🔴 Logging out...");
   try {
-    // Logout using Telegram API
     await client.invoke(new Api.auth.LogOut());
-
-    // Remove session file to ensure the account is completely logged out
     if (fs.existsSync(SESSION_FILE)) {
       fs.unlinkSync(SESSION_FILE);
     }
 
     await bot.sendMessage(ownerChatId, "✅ Successfully logged out! Session expired.");
-    process.exit(); // Exit the script
+    process.exit();
   } catch (error) {
     await bot.sendMessage(ownerChatId, `❌ Logout failed: ${error.message}`);
   }
@@ -180,7 +188,7 @@ async function start() {
     accountName = `${me.firstName} ${me.lastName || ""}`.trim();
     console.log(`✅ Logged in as: ${accountName}`);
 
-    await bot.sendMessage(ownerChatId, `✅ Script Started!\n👤 Account: ${accountName}`);
+    await bot.sendMessage(ownerChatId, `✅ **Script Started!**\n👤 Account: ${accountName}`);
 
     await fetchGroups();
     await forwardMessages();
@@ -200,12 +208,6 @@ async function start() {
 
       fs.writeFileSync(SESSION_FILE, client.session.save());
       console.clear();
-
-      const me = await client.getMe();
-      accountName = `${me.firstName} ${me.lastName || ""}`.trim();
-      console.log(`✅ Logged in as: ${accountName}`);
-
-      await bot.sendMessage(ownerChatId, `✅ **Script Started!**\n👤 Account: ${accountName}`);
 
       await fetchGroups();
       await forwardMessages();
