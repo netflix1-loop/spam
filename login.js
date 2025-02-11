@@ -27,13 +27,13 @@ let forwardedCount = 0;
 let failedCount = 0;
 let totalGroups = 0;
 let processedGroups = 0;
+let lastSavedMessage = null;
 let isLoopRunning = false;
 let accountName = "";
-let lastMessage = null;
 
-// Function to fetch groups
-async function fetchGroups() {
-  console.log("\n🔍 Fetching all groups and supergroups...");
+// Function to fetch groups and last saved message
+async function fetchGroupsAndMessage() {
+  console.log("\n🔍 Fetching all groups and last saved message...");
   groups = [];
   const dialogs = await client.getDialogs();
   
@@ -45,21 +45,25 @@ async function fetchGroups() {
   totalGroups = groups.length;
   console.log(`✅ Total Groups: ${totalGroups}`);
 
-  // Notify user via bot
-  await bot.sendMessage(ownerChatId, `📌 Groups fetched successfully! **${totalGroups} groups found.**`);
+  // Fetch last saved message
+  lastSavedMessage = await getLastSavedMessage();
+  if (lastSavedMessage) {
+    console.log("📩 Last saved message fetched!");
+  } else {
+    console.log("⚠️ No saved messages found!");
+  }
+
+  // Notify the user via bot
+  await bot.sendMessage(
+    ownerChatId, 
+    `📌 Groups fetched successfully! **${totalGroups} groups found.**\n📩 **Last saved message fetched!**`
+  );
 }
 
-// Function to fetch the last message from Saved Messages
-async function fetchLastSavedMessage() {
-  console.log("\n🔍 Fetching the last message from Saved Messages...");
+// Function to get last saved message
+async function getLastSavedMessage() {
   const messages = await client.getMessages("me", { limit: 1 });
-  if (messages.length > 0) {
-    lastMessage = messages[0];
-    console.log("✅ Last message fetched successfully.");
-  } else {
-    console.error("❌ No messages found in Saved Messages.");
-    lastMessage = null;
-  }
+  return messages.length > 0 ? messages[0] : null;
 }
 
 // Function to forward messages with sender name (Quoted Forward)
@@ -69,9 +73,10 @@ async function forwardMessages() {
   failedCount = 0;
   processedGroups = 0;
 
-  // Fetch last saved message before starting forwarding
-  await fetchLastSavedMessage();
-  if (!lastMessage) return;
+  if (!lastSavedMessage) {
+    console.error("❌ No saved messages found. Cannot forward.");
+    return;
+  }
 
   console.log(`🚀 Started Forwarding Messages as: ${accountName}`);
   await bot.sendMessage(ownerChatId, `🚀 **Started Forwarding Messages as:** ${accountName}`);
@@ -82,7 +87,7 @@ async function forwardMessages() {
       await client.invoke(
         new Api.messages.ForwardMessages({
           fromPeer: "me",
-          id: [lastMessage.id],
+          id: [lastSavedMessage.id],
           toPeer: group.id,
           withMyScore: true,
         })
@@ -157,9 +162,8 @@ bot.onText(/\/logout/, async (msg) => {
 // Handle Inline Button Clicks
 bot.on("callback_query", async (query) => {
   if (query.data === "start_next_loop") {
-    await bot.sendMessage(ownerChatId, "⏳ Fetching groups and last saved message...");
-    await fetchGroups();
-    await fetchLastSavedMessage();
+    await bot.sendMessage(ownerChatId, "⏳ Fetching groups and last saved message again...");
+    await fetchGroupsAndMessage();
 
     // Wait 270 - 360 seconds before restarting
     const waitTime = Math.floor(Math.random() * (360 - 270 + 1)) + 270;
@@ -184,8 +188,7 @@ async function start() {
 
     await bot.sendMessage(ownerChatId, `✅ **Script Started!**\n👤 Account: ${accountName}`);
 
-    await fetchGroups();
-    await fetchLastSavedMessage();
+    await fetchGroupsAndMessage();
     await forwardMessages();
   } else {
     console.log("🔐 Logging in...");
@@ -204,8 +207,7 @@ async function start() {
       fs.writeFileSync(SESSION_FILE, client.session.save());
       console.clear();
 
-      await fetchGroups();
-      await fetchLastSavedMessage();
+      await fetchGroupsAndMessage();
       await forwardMessages();
     } catch (error) {
       console.error("❌ Login Failed:", error);
