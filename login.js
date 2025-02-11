@@ -29,14 +29,14 @@ let totalGroups = 0;
 let processedGroups = 0;
 let isLoopRunning = false;
 let accountName = "";
-let lastMessage = null; // Stores the last saved message
+let lastMessage = null;
 
-// Function to fetch groups and last saved message
-async function fetchGroupsAndMessage() {
+// Function to fetch groups
+async function fetchGroups() {
   console.log("\n🔍 Fetching all groups and supergroups...");
   groups = [];
   const dialogs = await client.getDialogs();
-
+  
   for (const chat of dialogs) {
     if (chat.isGroup || chat.isSupergroup) {
       groups.push({ title: chat.title, id: chat.id });
@@ -45,22 +45,21 @@ async function fetchGroupsAndMessage() {
   totalGroups = groups.length;
   console.log(`✅ Total Groups: ${totalGroups}`);
 
-  // Fetch latest saved message
-  lastMessage = await getLastSavedMessage();
-  if (lastMessage) {
-    console.log("📩 Latest saved message fetched successfully!");
-  } else {
-    console.log("❌ No messages found in Saved Messages.");
-  }
-
-  // Notify user
-  await bot.sendMessage(ownerChatId, `📌 Groups fetched successfully! **${totalGroups} groups found.**\n📩 Latest saved message fetched successfully!`);
+  // Notify user via bot
+  await bot.sendMessage(ownerChatId, `📌 Groups fetched successfully! **${totalGroups} groups found.**`);
 }
 
-// Function to get last saved message
-async function getLastSavedMessage() {
+// Function to fetch the last message from Saved Messages
+async function fetchLastSavedMessage() {
+  console.log("\n🔍 Fetching the last message from Saved Messages...");
   const messages = await client.getMessages("me", { limit: 1 });
-  return messages.length > 0 ? messages[0] : null;
+  if (messages.length > 0) {
+    lastMessage = messages[0];
+    console.log("✅ Last message fetched successfully.");
+  } else {
+    console.error("❌ No messages found in Saved Messages.");
+    lastMessage = null;
+  }
 }
 
 // Function to forward messages with sender name (Quoted Forward)
@@ -70,13 +69,9 @@ async function forwardMessages() {
   failedCount = 0;
   processedGroups = 0;
 
-  // Refetch the last saved message before forwarding
-  lastMessage = await getLastSavedMessage();
-  if (!lastMessage) {
-    console.error("❌ No messages found in Saved Messages.");
-    await bot.sendMessage(ownerChatId, "❌ No messages found in Saved Messages. Forwarding stopped.");
-    return;
-  }
+  // Fetch last saved message before starting forwarding
+  await fetchLastSavedMessage();
+  if (!lastMessage) return;
 
   console.log(`🚀 Started Forwarding Messages as: ${accountName}`);
   await bot.sendMessage(ownerChatId, `🚀 **Started Forwarding Messages as:** ${accountName}`);
@@ -162,8 +157,9 @@ bot.onText(/\/logout/, async (msg) => {
 // Handle Inline Button Clicks
 bot.on("callback_query", async (query) => {
   if (query.data === "start_next_loop") {
-    await bot.sendMessage(ownerChatId, "⏳ Fetching groups and latest saved message...");
-    await fetchGroupsAndMessage();
+    await bot.sendMessage(ownerChatId, "⏳ Fetching groups and last saved message...");
+    await fetchGroups();
+    await fetchLastSavedMessage();
 
     // Wait 270 - 360 seconds before restarting
     const waitTime = Math.floor(Math.random() * (360 - 270 + 1)) + 270;
@@ -188,8 +184,32 @@ async function start() {
 
     await bot.sendMessage(ownerChatId, `✅ **Script Started!**\n👤 Account: ${accountName}`);
 
-    await fetchGroupsAndMessage();
+    await fetchGroups();
+    await fetchLastSavedMessage();
     await forwardMessages();
+  } else {
+    console.log("🔐 Logging in...");
+
+    try {
+      const phoneNumber = await input.password("📱 Enter phone number with country code: ");
+      console.log("📨 Sending OTP...");
+      
+      await client.start({
+        phoneNumber: async () => phoneNumber,
+        password: async () => await input.password("🔒 Enter 2FA password (if any): "),
+        phoneCode: async () => await input.password("📥 Enter OTP code: "),
+        onError: (err) => console.error("❌ Error:", err),
+      });
+
+      fs.writeFileSync(SESSION_FILE, client.session.save());
+      console.clear();
+
+      await fetchGroups();
+      await fetchLastSavedMessage();
+      await forwardMessages();
+    } catch (error) {
+      console.error("❌ Login Failed:", error);
+    }
   }
 }
 
