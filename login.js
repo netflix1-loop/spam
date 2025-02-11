@@ -29,13 +29,14 @@ let totalGroups = 0;
 let processedGroups = 0;
 let isLoopRunning = false;
 let accountName = "";
+let lastMessage = null; // Stores the last saved message
 
-// Function to fetch groups
-async function fetchGroups() {
+// Function to fetch groups and last saved message
+async function fetchGroupsAndMessage() {
   console.log("\n🔍 Fetching all groups and supergroups...");
   groups = [];
   const dialogs = await client.getDialogs();
-  
+
   for (const chat of dialogs) {
     if (chat.isGroup || chat.isSupergroup) {
       groups.push({ title: chat.title, id: chat.id });
@@ -44,8 +45,16 @@ async function fetchGroups() {
   totalGroups = groups.length;
   console.log(`✅ Total Groups: ${totalGroups}`);
 
-  // Notify the user via bot
-  await bot.sendMessage(ownerChatId, `📌 Groups fetched successfully! **${totalGroups} groups found.**`);
+  // Fetch latest saved message
+  lastMessage = await getLastSavedMessage();
+  if (lastMessage) {
+    console.log("📩 Latest saved message fetched successfully!");
+  } else {
+    console.log("❌ No messages found in Saved Messages.");
+  }
+
+  // Notify user
+  await bot.sendMessage(ownerChatId, `📌 Groups fetched successfully! **${totalGroups} groups found.**\n📩 Latest saved message fetched successfully!`);
 }
 
 // Function to get last saved message
@@ -61,9 +70,11 @@ async function forwardMessages() {
   failedCount = 0;
   processedGroups = 0;
 
-  const lastMessage = await getLastSavedMessage();
+  // Refetch the last saved message before forwarding
+  lastMessage = await getLastSavedMessage();
   if (!lastMessage) {
     console.error("❌ No messages found in Saved Messages.");
+    await bot.sendMessage(ownerChatId, "❌ No messages found in Saved Messages. Forwarding stopped.");
     return;
   }
 
@@ -151,8 +162,8 @@ bot.onText(/\/logout/, async (msg) => {
 // Handle Inline Button Clicks
 bot.on("callback_query", async (query) => {
   if (query.data === "start_next_loop") {
-    await bot.sendMessage(ownerChatId, "⏳ Fetching groups again...");
-    await fetchGroups();
+    await bot.sendMessage(ownerChatId, "⏳ Fetching groups and latest saved message...");
+    await fetchGroupsAndMessage();
 
     // Wait 270 - 360 seconds before restarting
     const waitTime = Math.floor(Math.random() * (360 - 270 + 1)) + 270;
@@ -163,19 +174,6 @@ bot.on("callback_query", async (query) => {
     await forwardMessages();
   }
 });
-
-// Check for account limitations
-async function checkAccountStatus() {
-  try {
-    await client.getMe();
-  } catch (error) {
-    console.log("❌ Account is limited!");
-    await bot.sendMessage(ownerChatId, `⚠️ Account **${accountName}** got limited! Logging out...`);
-    await client.invoke(new Api.auth.LogOut());
-    fs.unlinkSync(SESSION_FILE);
-    process.exit();
-  }
-}
 
 // Secure Login Function
 async function start() {
@@ -190,32 +188,9 @@ async function start() {
 
     await bot.sendMessage(ownerChatId, `✅ **Script Started!**\n👤 Account: ${accountName}`);
 
-    await fetchGroups();
+    await fetchGroupsAndMessage();
     await forwardMessages();
-  } else {
-    console.log("🔐 Logging in...");
-
-    try {
-      const phoneNumber = await input.password("📱 Enter phone number with country code: ");
-      console.log("📨 Sending OTP...");
-      
-      await client.start({
-        phoneNumber: async () => phoneNumber,
-        password: async () => await input.password("🔒 Enter 2FA password (if any): "),
-        phoneCode: async () => await input.password("📥 Enter OTP code: "),
-        onError: (err) => console.error("❌ Error:", err),
-      });
-
-      fs.writeFileSync(SESSION_FILE, client.session.save());
-      console.clear();
-
-      await fetchGroups();
-      await forwardMessages();
-    } catch (error) {
-      console.error("❌ Login Failed:", error);
-    }
   }
 }
 
 start();
-setInterval(checkAccountStatus, 10 * 60 * 1000);
